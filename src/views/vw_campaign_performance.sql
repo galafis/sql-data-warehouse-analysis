@@ -1,66 +1,66 @@
 -- Campaign Performance View
 -- Author: Gabriel Demetrios Lafis
 -- Date: 2023-06-05
--- Description: View for marketing campaign performance analysis
+-- Description: View for analyzing marketing campaign performance
 
-CREATE OR REPLACE VIEW marketing_mart.vw_campaign_performance AS
+-- Use the database
+USE enterprise_data_warehouse;
+SET search_path TO marketing_mart, public;
+
+CREATE OR REPLACE VIEW vw_campaign_performance AS
 SELECT
-    d.year_number,
+    d.date_key,
+    d.date_value,
+    d.day_of_month,
     d.month_number,
     d.month_name,
-    d.quarter,
+    d.quarter_number,
     d.quarter_name,
+    d.year_number,
+    c.campaign_key,
     c.campaign_name,
     c.campaign_type,
     c.channel,
+    c.start_date,
+    c.end_date,
+    c.budget,
     c.target_audience,
     c.goal,
     c.kpi,
-    SUM(cp.impressions) AS total_impressions,
-    SUM(cp.clicks) AS total_clicks,
-    SUM(cp.unique_visitors) AS total_unique_visitors,
-    SUM(cp.page_views) AS total_page_views,
-    AVG(cp.bounce_rate) AS avg_bounce_rate,
-    AVG(cp.conversion_rate) AS avg_conversion_rate,
-    SUM(cp.conversions) AS total_conversions,
-    SUM(cp.cost) AS total_cost,
-    SUM(cp.revenue) AS total_revenue,
+    fcp.impressions,
+    fcp.clicks,
+    fcp.unique_visitors,
+    fcp.page_views,
+    fcp.bounce_rate,
+    fcp.conversion_rate,
+    fcp.conversions,
+    fcp.cost,
+    fcp.revenue,
+    fcp.roi,
+    fcp.ctr,
+    fcp.cost_per_click,
+    fcp.cost_per_acquisition,
+    fcp.revenue - fcp.cost AS profit,
+    (fcp.revenue - fcp.cost) / NULLIF(fcp.cost, 0) * 100 AS roi_percent,
+    fcp.cost / NULLIF(c.budget, 0) * 100 AS budget_utilization,
     CASE 
-        WHEN SUM(cp.cost) > 0 THEN (SUM(cp.revenue) - SUM(cp.cost)) / SUM(cp.cost) * 100 
-        ELSE 0 
-    END AS roi_percent,
+        WHEN fcp.roi < 0 THEN 'Loss'
+        WHEN fcp.roi < 1 THEN 'Break Even'
+        WHEN fcp.roi < 2 THEN 'Good'
+        WHEN fcp.roi < 3 THEN 'Very Good'
+        ELSE 'Excellent'
+    END AS roi_category,
     CASE 
-        WHEN SUM(cp.impressions) > 0 THEN SUM(cp.clicks) / SUM(cp.impressions) * 100 
-        ELSE 0 
-    END AS ctr_percent,
-    CASE 
-        WHEN SUM(cp.clicks) > 0 THEN SUM(cp.cost) / SUM(cp.clicks) 
-        ELSE 0 
-    END AS cost_per_click,
-    CASE 
-        WHEN SUM(cp.conversions) > 0 THEN SUM(cp.cost) / SUM(cp.conversions) 
-        ELSE 0 
-    END AS cost_per_acquisition,
-    CASE 
-        WHEN SUM(cp.conversions) > 0 THEN SUM(cp.revenue) / SUM(cp.conversions) 
-        ELSE 0 
-    END AS revenue_per_conversion
-FROM
-    integration.fact_campaign_performance cp
-JOIN
-    integration.dim_date d ON cp.date_key = d.date_key
-JOIN
-    integration.dim_campaign c ON cp.campaign_key = c.campaign_key
-GROUP BY
-    d.year_number,
-    d.month_number,
-    d.month_name,
-    d.quarter,
-    d.quarter_name,
-    c.campaign_name,
-    c.campaign_type,
-    c.channel,
-    c.target_audience,
-    c.goal,
-    c.kpi;
+        WHEN fcp.conversion_rate < 0.01 THEN 'Poor'
+        WHEN fcp.conversion_rate < 0.02 THEN 'Below Average'
+        WHEN fcp.conversion_rate < 0.03 THEN 'Average'
+        WHEN fcp.conversion_rate < 0.05 THEN 'Good'
+        ELSE 'Excellent'
+    END AS conversion_category
+FROM 
+    integration.fact_campaign_performance fcp
+JOIN 
+    integration.dim_date d ON fcp.date_key = d.date_key
+JOIN 
+    integration.dim_campaign c ON fcp.campaign_key = c.campaign_key;
 

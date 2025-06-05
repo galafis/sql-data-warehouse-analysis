@@ -1,151 +1,189 @@
 -- Generate Date Dimension Stored Procedure
 -- Author: Gabriel Demetrios Lafis
 -- Date: 2023-06-05
--- Description: Generates the date dimension table with calendar attributes
+-- Description: Stored procedure to generate the date dimension table with a specified date range
+
+-- Use the database
+USE enterprise_data_warehouse;
+SET search_path TO integration, public;
 
 DELIMITER //
 
-CREATE OR REPLACE PROCEDURE integration.sp_generate_date_dimension(
+CREATE OR REPLACE PROCEDURE sp_generate_date_dimension(
     IN p_start_date DATE,
     IN p_end_date DATE
 )
 BEGIN
     DECLARE v_date DATE;
-    DECLARE v_first_day_of_fiscal_year DATE;
-    DECLARE v_batch_id VARCHAR(50);
+    DECLARE v_date_key INT;
+    DECLARE v_day_of_week INT;
+    DECLARE v_day_name VARCHAR(10);
+    DECLARE v_day_of_month INT;
+    DECLARE v_day_of_year INT;
+    DECLARE v_week_of_year INT;
+    DECLARE v_month_number INT;
+    DECLARE v_month_name VARCHAR(10);
+    DECLARE v_quarter_number INT;
+    DECLARE v_quarter_name VARCHAR(10);
+    DECLARE v_year_number INT;
+    DECLARE v_is_weekend BOOLEAN;
+    DECLARE v_is_holiday BOOLEAN;
+    DECLARE v_holiday_name VARCHAR(50);
+    DECLARE v_fiscal_day_of_year INT;
+    DECLARE v_fiscal_week_of_year INT;
+    DECLARE v_fiscal_month_number INT;
+    DECLARE v_fiscal_quarter_number INT;
+    DECLARE v_fiscal_year_number INT;
     
-    -- Generate batch ID
-    SET v_batch_id = CONCAT('DATE_DIM_', DATE_FORMAT(NOW(), '%Y%m%d%H%i%s'));
+    -- Validate input parameters
+    IF p_start_date IS NULL OR p_end_date IS NULL THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Start date and end date must not be NULL';
+    END IF;
     
-    -- Log start of procedure
-    INSERT INTO metadata.etl_log (
-        batch_id, source_table, target_table, records_read, records_inserted, 
-        records_rejected, start_time, end_time, status, message
-    )
-    VALUES (
-        v_batch_id, 'SYSTEM', 'integration.dim_date', 0, 0, 0, 
-        NOW(), NULL, 'RUNNING', 'Starting date dimension generation'
-    );
+    IF p_start_date > p_end_date THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Start date must be less than or equal to end date';
+    END IF;
     
-    -- Set the date to the start date
+    -- Delete existing records if they exist in the specified range
+    DELETE FROM dim_date 
+    WHERE date_value BETWEEN p_start_date AND p_end_date;
+    
+    -- Set the current date to the start date
     SET v_date = p_start_date;
     
-    -- Loop through each date
+    -- Loop through each date in the range
     WHILE v_date <= p_end_date DO
-        -- Calculate fiscal year start (assuming fiscal year starts on July 1)
-        IF MONTH(v_date) >= 7 THEN
-            SET v_first_day_of_fiscal_year = CONCAT(YEAR(v_date), '-07-01');
-        ELSE
-            SET v_first_day_of_fiscal_year = CONCAT(YEAR(v_date) - 1, '-07-01');
+        -- Calculate date key (YYYYMMDD format)
+        SET v_date_key = YEAR(v_date) * 10000 + MONTH(v_date) * 100 + DAY(v_date);
+        
+        -- Calculate date attributes
+        SET v_day_of_week = DAYOFWEEK(v_date);
+        SET v_day_name = DAYNAME(v_date);
+        SET v_day_of_month = DAYOFMONTH(v_date);
+        SET v_day_of_year = DAYOFYEAR(v_date);
+        SET v_week_of_year = WEEKOFYEAR(v_date);
+        SET v_month_number = MONTH(v_date);
+        SET v_month_name = MONTHNAME(v_date);
+        SET v_quarter_number = QUARTER(v_date);
+        SET v_quarter_name = CONCAT('Q', v_quarter_number);
+        SET v_year_number = YEAR(v_date);
+        
+        -- Determine if it's a weekend
+        SET v_is_weekend = (v_day_of_week = 1 OR v_day_of_week = 7);
+        
+        -- Initialize holiday flags
+        SET v_is_holiday = FALSE;
+        SET v_holiday_name = NULL;
+        
+        -- Check for common US holidays (simplified)
+        -- New Year's Day
+        IF v_month_number = 1 AND v_day_of_month = 1 THEN
+            SET v_is_holiday = TRUE;
+            SET v_holiday_name = 'New Year''s Day';
         END IF;
         
-        -- Insert or update the date record
-        INSERT INTO integration.dim_date (
+        -- Independence Day
+        IF v_month_number = 7 AND v_day_of_month = 4 THEN
+            SET v_is_holiday = TRUE;
+            SET v_holiday_name = 'Independence Day';
+        END IF;
+        
+        -- Christmas
+        IF v_month_number = 12 AND v_day_of_month = 25 THEN
+            SET v_is_holiday = TRUE;
+            SET v_holiday_name = 'Christmas';
+        END IF;
+        
+        -- Calculate fiscal calendar (assuming fiscal year starts July 1)
+        IF v_month_number >= 7 THEN
+            SET v_fiscal_year_number = v_year_number + 1;
+            SET v_fiscal_month_number = v_month_number - 6;
+            
+            IF v_fiscal_month_number <= 3 THEN
+                SET v_fiscal_quarter_number = 1;
+            ELSEIF v_fiscal_month_number <= 6 THEN
+                SET v_fiscal_quarter_number = 2;
+            ELSEIF v_fiscal_month_number <= 9 THEN
+                SET v_fiscal_quarter_number = 3;
+            ELSE
+                SET v_fiscal_quarter_number = 4;
+            END IF;
+        ELSE
+            SET v_fiscal_year_number = v_year_number;
+            SET v_fiscal_month_number = v_month_number + 6;
+            
+            IF v_fiscal_month_number <= 3 THEN
+                SET v_fiscal_quarter_number = 1;
+            ELSEIF v_fiscal_month_number <= 6 THEN
+                SET v_fiscal_quarter_number = 2;
+            ELSEIF v_fiscal_month_number <= 9 THEN
+                SET v_fiscal_quarter_number = 3;
+            ELSE
+                SET v_fiscal_quarter_number = 4;
+            END IF;
+        END IF;
+        
+        -- Calculate fiscal day of year and week of year (simplified)
+        IF v_month_number >= 7 THEN
+            SET v_fiscal_day_of_year = DATEDIFF(v_date, CONCAT(v_year_number, '-07-01')) + 1;
+        ELSE
+            SET v_fiscal_day_of_year = DATEDIFF(v_date, CONCAT(v_year_number - 1, '-07-01')) + 1;
+        END IF;
+        
+        SET v_fiscal_week_of_year = FLOOR((v_fiscal_day_of_year - 1) / 7) + 1;
+        
+        -- Insert the record into the date dimension table
+        INSERT INTO dim_date (
             date_key,
-            full_date,
-            day_of_month,
-            day_name,
+            date_value,
             day_of_week,
+            day_name,
+            day_of_month,
             day_of_year,
             week_of_year,
             month_number,
             month_name,
-            quarter,
+            quarter_number,
             quarter_name,
             year_number,
             is_weekend,
             is_holiday,
             holiday_name,
-            fiscal_month,
-            fiscal_quarter,
-            fiscal_year
-        )
-        VALUES (
-            -- date_key (YYYYMMDD format)
-            YEAR(v_date) * 10000 + MONTH(v_date) * 100 + DAY(v_date),
-            -- full_date
+            fiscal_day_of_year,
+            fiscal_week_of_year,
+            fiscal_month_number,
+            fiscal_quarter_number,
+            fiscal_year_number
+        ) VALUES (
+            v_date_key,
             v_date,
-            -- day_of_month
-            DAY(v_date),
-            -- day_name
-            DAYNAME(v_date),
-            -- day_of_week (1 = Sunday, 7 = Saturday)
-            DAYOFWEEK(v_date),
-            -- day_of_year
-            DAYOFYEAR(v_date),
-            -- week_of_year
-            WEEK(v_date, 3),
-            -- month_number
-            MONTH(v_date),
-            -- month_name
-            MONTHNAME(v_date),
-            -- quarter
-            QUARTER(v_date),
-            -- quarter_name
-            CONCAT('Q', QUARTER(v_date)),
-            -- year_number
-            YEAR(v_date),
-            -- is_weekend
-            CASE WHEN DAYOFWEEK(v_date) IN (1, 7) THEN TRUE ELSE FALSE END,
-            -- is_holiday (simplified logic - would need more complex logic for actual holidays)
-            CASE 
-                WHEN (MONTH(v_date) = 1 AND DAY(v_date) = 1) OR -- New Year's Day
-                     (MONTH(v_date) = 7 AND DAY(v_date) = 4) OR -- Independence Day
-                     (MONTH(v_date) = 12 AND DAY(v_date) = 25)  -- Christmas
-                THEN TRUE 
-                ELSE FALSE 
-            END,
-            -- holiday_name
-            CASE 
-                WHEN (MONTH(v_date) = 1 AND DAY(v_date) = 1) THEN 'New Year''s Day'
-                WHEN (MONTH(v_date) = 7 AND DAY(v_date) = 4) THEN 'Independence Day'
-                WHEN (MONTH(v_date) = 12 AND DAY(v_date) = 25) THEN 'Christmas'
-                ELSE NULL
-            END,
-            -- fiscal_month (assuming fiscal year starts on July 1)
-            CASE
-                WHEN MONTH(v_date) >= 7 THEN MONTH(v_date) - 6
-                ELSE MONTH(v_date) + 6
-            END,
-            -- fiscal_quarter (assuming fiscal year starts on July 1)
-            CASE
-                WHEN MONTH(v_date) BETWEEN 7 AND 9 THEN 1
-                WHEN MONTH(v_date) BETWEEN 10 AND 12 THEN 2
-                WHEN MONTH(v_date) BETWEEN 1 AND 3 THEN 3
-                WHEN MONTH(v_date) BETWEEN 4 AND 6 THEN 4
-            END,
-            -- fiscal_year (assuming fiscal year starts on July 1)
-            CASE
-                WHEN MONTH(v_date) >= 7 THEN YEAR(v_date) + 1
-                ELSE YEAR(v_date)
-            END
-        )
-        ON DUPLICATE KEY UPDATE
-            day_name = VALUES(day_name),
-            is_weekend = VALUES(is_weekend),
-            is_holiday = VALUES(is_holiday),
-            holiday_name = VALUES(holiday_name);
+            v_day_of_week,
+            v_day_name,
+            v_day_of_month,
+            v_day_of_year,
+            v_week_of_year,
+            v_month_number,
+            v_month_name,
+            v_quarter_number,
+            v_quarter_name,
+            v_year_number,
+            v_is_weekend,
+            v_is_holiday,
+            v_holiday_name,
+            v_fiscal_day_of_year,
+            v_fiscal_week_of_year,
+            v_fiscal_month_number,
+            v_fiscal_quarter_number,
+            v_fiscal_year_number
+        );
         
         -- Move to the next date
         SET v_date = DATE_ADD(v_date, INTERVAL 1 DAY);
     END WHILE;
     
-    -- Log completion of procedure
-    UPDATE metadata.etl_log
-    SET 
-        end_time = NOW(),
-        records_read = DATEDIFF(p_end_date, p_start_date) + 1,
-        records_inserted = DATEDIFF(p_end_date, p_start_date) + 1,
-        records_rejected = 0,
-        status = 'COMPLETED',
-        message = CONCAT('Successfully generated date dimension from ', p_start_date, ' to ', p_end_date)
-    WHERE 
-        batch_id = v_batch_id AND
-        source_table = 'SYSTEM' AND
-        target_table = 'integration.dim_date';
-    
-    -- Return success message
-    SELECT CONCAT('Date dimension generated successfully from ', p_start_date, ' to ', p_end_date) AS result;
+    -- Return the number of records inserted
+    SELECT CONCAT('Generated date dimension from ', p_start_date, ' to ', p_end_date, 
+                 '. Total records: ', DATEDIFF(p_end_date, p_start_date) + 1) AS result;
 END //
 
 DELIMITER ;

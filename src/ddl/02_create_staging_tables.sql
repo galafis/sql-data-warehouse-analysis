@@ -7,9 +7,11 @@
 USE enterprise_data_warehouse;
 SET search_path TO staging, public;
 
--- Customer staging table
+-- Create staging tables with minimal transformation
+-- These tables closely match the source system structure
+
+-- Staging table for Customer data
 CREATE TABLE IF NOT EXISTS stg_customer (
-    customer_id BIGINT AUTO_INCREMENT PRIMARY KEY,
     source_system VARCHAR(50) NOT NULL,
     source_customer_id VARCHAR(50) NOT NULL,
     customer_name VARCHAR(255) NOT NULL,
@@ -22,19 +24,18 @@ CREATE TABLE IF NOT EXISTS stg_customer (
     state_province VARCHAR(100),
     postal_code VARCHAR(20),
     country VARCHAR(100),
-    region VARCHAR(100),
-    status VARCHAR(50),
-    created_date TIMESTAMP,
-    updated_date TIMESTAMP,
+    customer_since DATE,
+    credit_limit DECIMAL(15, 2),
+    status VARCHAR(20),
+    source_last_updated TIMESTAMP,
     batch_id VARCHAR(50) NOT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY (source_system, source_customer_id, batch_id),
-    INDEX idx_stg_customer_batch_id (batch_id)
+    batch_timestamp TIMESTAMP NOT NULL,
+    record_checksum VARCHAR(64) NOT NULL,
+    PRIMARY KEY (source_system, source_customer_id, batch_id)
 );
 
--- Product staging table
+-- Staging table for Product data
 CREATE TABLE IF NOT EXISTS stg_product (
-    product_id BIGINT AUTO_INCREMENT PRIMARY KEY,
     source_system VARCHAR(50) NOT NULL,
     source_product_id VARCHAR(50) NOT NULL,
     product_name VARCHAR(255) NOT NULL,
@@ -42,27 +43,73 @@ CREATE TABLE IF NOT EXISTS stg_product (
     category VARCHAR(100),
     subcategory VARCHAR(100),
     brand VARCHAR(100),
-    manufacturer VARCHAR(100),
+    manufacturer VARCHAR(255),
     sku VARCHAR(50),
     upc VARCHAR(50),
     unit_cost DECIMAL(15, 2),
     list_price DECIMAL(15, 2),
     weight DECIMAL(10, 2),
     weight_unit VARCHAR(10),
-    size VARCHAR(50),
+    dimensions VARCHAR(50),
     color VARCHAR(50),
-    status VARCHAR(50),
-    created_date TIMESTAMP,
-    updated_date TIMESTAMP,
+    size VARCHAR(50),
+    status VARCHAR(20),
+    source_last_updated TIMESTAMP,
     batch_id VARCHAR(50) NOT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY (source_system, source_product_id, batch_id),
-    INDEX idx_stg_product_batch_id (batch_id)
+    batch_timestamp TIMESTAMP NOT NULL,
+    record_checksum VARCHAR(64) NOT NULL,
+    PRIMARY KEY (source_system, source_product_id, batch_id)
 );
 
--- Store staging table
+-- Staging table for Order data
+CREATE TABLE IF NOT EXISTS stg_order (
+    source_system VARCHAR(50) NOT NULL,
+    source_order_id VARCHAR(50) NOT NULL,
+    source_customer_id VARCHAR(50) NOT NULL,
+    source_store_id VARCHAR(50),
+    source_employee_id VARCHAR(50),
+    order_date TIMESTAMP NOT NULL,
+    order_status VARCHAR(20) NOT NULL,
+    payment_method VARCHAR(50),
+    payment_status VARCHAR(20),
+    shipping_method VARCHAR(50),
+    shipping_status VARCHAR(20),
+    currency_code VARCHAR(3),
+    subtotal DECIMAL(15, 2),
+    tax_amount DECIMAL(15, 2),
+    shipping_amount DECIMAL(15, 2),
+    discount_amount DECIMAL(15, 2),
+    total_amount DECIMAL(15, 2),
+    source_last_updated TIMESTAMP,
+    batch_id VARCHAR(50) NOT NULL,
+    batch_timestamp TIMESTAMP NOT NULL,
+    record_checksum VARCHAR(64) NOT NULL,
+    PRIMARY KEY (source_system, source_order_id, batch_id)
+);
+
+-- Staging table for Order Line data
+CREATE TABLE IF NOT EXISTS stg_order_line (
+    source_system VARCHAR(50) NOT NULL,
+    source_order_id VARCHAR(50) NOT NULL,
+    source_order_line_id VARCHAR(50) NOT NULL,
+    source_product_id VARCHAR(50) NOT NULL,
+    quantity INT NOT NULL,
+    unit_price DECIMAL(15, 2) NOT NULL,
+    unit_cost DECIMAL(15, 2),
+    discount_percent DECIMAL(5, 2),
+    discount_amount DECIMAL(15, 2),
+    line_total DECIMAL(15, 2) NOT NULL,
+    tax_amount DECIMAL(15, 2),
+    source_promotion_id VARCHAR(50),
+    source_last_updated TIMESTAMP,
+    batch_id VARCHAR(50) NOT NULL,
+    batch_timestamp TIMESTAMP NOT NULL,
+    record_checksum VARCHAR(64) NOT NULL,
+    PRIMARY KEY (source_system, source_order_id, source_order_line_id, batch_id)
+);
+
+-- Staging table for Store data
 CREATE TABLE IF NOT EXISTS stg_store (
-    store_id BIGINT AUTO_INCREMENT PRIMARY KEY,
     source_system VARCHAR(50) NOT NULL,
     source_store_id VARCHAR(50) NOT NULL,
     store_name VARCHAR(255) NOT NULL,
@@ -73,25 +120,23 @@ CREATE TABLE IF NOT EXISTS stg_store (
     state_province VARCHAR(100),
     postal_code VARCHAR(20),
     country VARCHAR(100),
-    region VARCHAR(100),
     phone VARCHAR(50),
     email VARCHAR(255),
     manager_name VARCHAR(255),
     open_date DATE,
     close_date DATE,
-    square_footage INT,
-    status VARCHAR(50),
-    created_date TIMESTAMP,
-    updated_date TIMESTAMP,
+    status VARCHAR(20),
+    size_sqft INT,
+    source_region_id VARCHAR(50),
+    source_last_updated TIMESTAMP,
     batch_id VARCHAR(50) NOT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY (source_system, source_store_id, batch_id),
-    INDEX idx_stg_store_batch_id (batch_id)
+    batch_timestamp TIMESTAMP NOT NULL,
+    record_checksum VARCHAR(64) NOT NULL,
+    PRIMARY KEY (source_system, source_store_id, batch_id)
 );
 
--- Employee staging table
+-- Staging table for Employee data
 CREATE TABLE IF NOT EXISTS stg_employee (
-    employee_id BIGINT AUTO_INCREMENT PRIMARY KEY,
     source_system VARCHAR(50) NOT NULL,
     source_employee_id VARCHAR(50) NOT NULL,
     first_name VARCHAR(100) NOT NULL,
@@ -102,22 +147,65 @@ CREATE TABLE IF NOT EXISTS stg_employee (
     termination_date DATE,
     job_title VARCHAR(100),
     department VARCHAR(100),
-    manager_id VARCHAR(50),
-    store_id VARCHAR(50),
+    source_manager_id VARCHAR(50),
+    source_store_id VARCHAR(50),
     salary DECIMAL(15, 2),
     hourly_rate DECIMAL(10, 2),
-    status VARCHAR(50),
-    created_date TIMESTAMP,
-    updated_date TIMESTAMP,
+    employment_type VARCHAR(20),
+    status VARCHAR(20),
+    source_last_updated TIMESTAMP,
     batch_id VARCHAR(50) NOT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY (source_system, source_employee_id, batch_id),
-    INDEX idx_stg_employee_batch_id (batch_id)
+    batch_timestamp TIMESTAMP NOT NULL,
+    record_checksum VARCHAR(64) NOT NULL,
+    PRIMARY KEY (source_system, source_employee_id, batch_id)
 );
 
--- Campaign staging table
+-- Staging table for Promotion data
+CREATE TABLE IF NOT EXISTS stg_promotion (
+    source_system VARCHAR(50) NOT NULL,
+    source_promotion_id VARCHAR(50) NOT NULL,
+    promotion_name VARCHAR(255) NOT NULL,
+    promotion_description TEXT,
+    promotion_type VARCHAR(50),
+    discount_type VARCHAR(20),
+    discount_value DECIMAL(15, 2),
+    discount_percent DECIMAL(5, 2),
+    start_date DATE,
+    end_date DATE,
+    min_purchase_amount DECIMAL(15, 2),
+    min_quantity INT,
+    max_quantity INT,
+    status VARCHAR(20),
+    source_campaign_id VARCHAR(50),
+    source_last_updated TIMESTAMP,
+    batch_id VARCHAR(50) NOT NULL,
+    batch_timestamp TIMESTAMP NOT NULL,
+    record_checksum VARCHAR(64) NOT NULL,
+    PRIMARY KEY (source_system, source_promotion_id, batch_id)
+);
+
+-- Staging table for Inventory data
+CREATE TABLE IF NOT EXISTS stg_inventory (
+    source_system VARCHAR(50) NOT NULL,
+    source_product_id VARCHAR(50) NOT NULL,
+    source_store_id VARCHAR(50) NOT NULL,
+    inventory_date DATE NOT NULL,
+    quantity_on_hand INT NOT NULL,
+    quantity_on_order INT,
+    quantity_in_transit INT,
+    reorder_point INT,
+    reorder_quantity INT,
+    unit_cost DECIMAL(15, 2),
+    total_value DECIMAL(15, 2),
+    source_last_updated TIMESTAMP,
+    batch_id VARCHAR(50) NOT NULL,
+    batch_timestamp TIMESTAMP NOT NULL,
+    record_checksum VARCHAR(64) NOT NULL,
+    PRIMARY KEY (source_system, source_product_id, source_store_id, inventory_date, batch_id)
+);
+
+-- Staging table for Campaign data
 CREATE TABLE IF NOT EXISTS stg_campaign (
-    campaign_id BIGINT AUTO_INCREMENT PRIMARY KEY,
     source_system VARCHAR(50) NOT NULL,
     source_campaign_id VARCHAR(50) NOT NULL,
     campaign_name VARCHAR(255) NOT NULL,
@@ -128,122 +216,21 @@ CREATE TABLE IF NOT EXISTS stg_campaign (
     end_date DATE,
     budget DECIMAL(15, 2),
     target_audience VARCHAR(100),
-    goal VARCHAR(255),
+    goal VARCHAR(100),
     kpi VARCHAR(100),
-    status VARCHAR(50),
-    created_date TIMESTAMP,
-    updated_date TIMESTAMP,
+    status VARCHAR(20),
+    source_last_updated TIMESTAMP,
     batch_id VARCHAR(50) NOT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY (source_system, source_campaign_id, batch_id),
-    INDEX idx_stg_campaign_batch_id (batch_id)
+    batch_timestamp TIMESTAMP NOT NULL,
+    record_checksum VARCHAR(64) NOT NULL,
+    PRIMARY KEY (source_system, source_campaign_id, batch_id)
 );
 
--- Promotion staging table
-CREATE TABLE IF NOT EXISTS stg_promotion (
-    promotion_id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    source_system VARCHAR(50) NOT NULL,
-    source_promotion_id VARCHAR(50) NOT NULL,
-    promotion_name VARCHAR(255) NOT NULL,
-    promotion_description TEXT,
-    promotion_type VARCHAR(50),
-    discount_type VARCHAR(50),
-    discount_value DECIMAL(15, 2),
-    discount_percent DECIMAL(5, 2),
-    start_date DATE,
-    end_date DATE,
-    minimum_order_value DECIMAL(15, 2),
-    maximum_discount DECIMAL(15, 2),
-    campaign_id VARCHAR(50),
-    status VARCHAR(50),
-    created_date TIMESTAMP,
-    updated_date TIMESTAMP,
-    batch_id VARCHAR(50) NOT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY (source_system, source_promotion_id, batch_id),
-    INDEX idx_stg_promotion_batch_id (batch_id)
-);
-
--- Order staging table
-CREATE TABLE IF NOT EXISTS stg_order (
-    order_id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    source_system VARCHAR(50) NOT NULL,
-    source_order_id VARCHAR(50) NOT NULL,
-    order_date TIMESTAMP NOT NULL,
-    source_customer_id VARCHAR(50) NOT NULL,
-    source_store_id VARCHAR(50),
-    source_employee_id VARCHAR(50),
-    order_status VARCHAR(50) NOT NULL,
-    payment_status VARCHAR(50),
-    shipping_status VARCHAR(50),
-    payment_method VARCHAR(50),
-    shipping_method VARCHAR(50),
-    currency_code VARCHAR(3),
-    subtotal DECIMAL(15, 2) NOT NULL,
-    tax_amount DECIMAL(15, 2),
-    shipping_amount DECIMAL(15, 2),
-    discount_amount DECIMAL(15, 2),
-    total_amount DECIMAL(15, 2) NOT NULL,
-    batch_id VARCHAR(50) NOT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY (source_system, source_order_id, batch_id),
-    INDEX idx_stg_order_batch_id (batch_id)
-);
-
--- Order Line staging table
-CREATE TABLE IF NOT EXISTS stg_order_line (
-    order_line_id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    source_system VARCHAR(50) NOT NULL,
-    source_order_id VARCHAR(50) NOT NULL,
-    source_order_line_id VARCHAR(50) NOT NULL,
-    source_product_id VARCHAR(50) NOT NULL,
-    source_promotion_id VARCHAR(50),
-    quantity INT NOT NULL,
-    unit_price DECIMAL(15, 2) NOT NULL,
-    unit_cost DECIMAL(15, 2),
-    discount_percent DECIMAL(5, 2),
-    discount_amount DECIMAL(15, 2),
-    tax_amount DECIMAL(15, 2),
-    line_total DECIMAL(15, 2) NOT NULL,
-    batch_id VARCHAR(50) NOT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY (source_system, source_order_id, source_order_line_id, batch_id),
-    INDEX idx_stg_order_line_batch_id (batch_id)
-);
-
--- Inventory staging table
-CREATE TABLE IF NOT EXISTS stg_inventory (
-    inventory_id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    source_system VARCHAR(50) NOT NULL,
-    source_inventory_id VARCHAR(50) NOT NULL,
-    inventory_date DATE NOT NULL,
-    source_product_id VARCHAR(50) NOT NULL,
-    source_store_id VARCHAR(50) NOT NULL,
-    quantity_on_hand INT NOT NULL,
-    quantity_on_order INT,
-    quantity_in_transit INT,
-    quantity_reserved INT,
-    quantity_available INT,
-    reorder_point INT,
-    reorder_quantity INT,
-    unit_cost DECIMAL(15, 2),
-    total_value DECIMAL(15, 2),
-    days_of_supply INT,
-    is_stock_out BOOLEAN,
-    batch_id VARCHAR(50) NOT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY (source_system, source_inventory_id, batch_id),
-    INDEX idx_stg_inventory_batch_id (batch_id)
-);
-
--- Campaign Performance staging table
+-- Staging table for Campaign Performance data
 CREATE TABLE IF NOT EXISTS stg_campaign_performance (
-    campaign_performance_id BIGINT AUTO_INCREMENT PRIMARY KEY,
     source_system VARCHAR(50) NOT NULL,
-    source_campaign_performance_id VARCHAR(50) NOT NULL,
-    performance_date DATE NOT NULL,
     source_campaign_id VARCHAR(50) NOT NULL,
-    channel VARCHAR(50) NOT NULL,
+    performance_date DATE NOT NULL,
     impressions INT,
     clicks INT,
     unique_visitors INT,
@@ -253,16 +240,22 @@ CREATE TABLE IF NOT EXISTS stg_campaign_performance (
     conversions INT,
     cost DECIMAL(15, 2),
     revenue DECIMAL(15, 2),
-    roi DECIMAL(15, 4),
-    ctr DECIMAL(15, 4),
-    cost_per_click DECIMAL(15, 4),
-    cost_per_acquisition DECIMAL(15, 4),
+    source_last_updated TIMESTAMP,
     batch_id VARCHAR(50) NOT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY (source_system, source_campaign_performance_id, batch_id),
-    INDEX idx_stg_campaign_performance_batch_id (batch_id)
+    batch_timestamp TIMESTAMP NOT NULL,
+    record_checksum VARCHAR(64) NOT NULL,
+    PRIMARY KEY (source_system, source_campaign_id, performance_date, batch_id)
 );
 
--- Print completion message
-SELECT 'Enterprise Data Warehouse staging tables created successfully.' AS result;
+-- Create indexes for better performance
+CREATE INDEX idx_stg_customer_source_last_updated ON stg_customer(source_last_updated);
+CREATE INDEX idx_stg_product_source_last_updated ON stg_product(source_last_updated);
+CREATE INDEX idx_stg_order_source_last_updated ON stg_order(source_last_updated);
+CREATE INDEX idx_stg_order_line_source_last_updated ON stg_order_line(source_last_updated);
+CREATE INDEX idx_stg_store_source_last_updated ON stg_store(source_last_updated);
+CREATE INDEX idx_stg_employee_source_last_updated ON stg_employee(source_last_updated);
+CREATE INDEX idx_stg_promotion_source_last_updated ON stg_promotion(source_last_updated);
+CREATE INDEX idx_stg_inventory_source_last_updated ON stg_inventory(source_last_updated);
+CREATE INDEX idx_stg_campaign_source_last_updated ON stg_campaign(source_last_updated);
+CREATE INDEX idx_stg_campaign_performance_source_last_updated ON stg_campaign_performance(source_last_updated);
 
