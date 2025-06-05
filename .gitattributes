@@ -1,4 +1,6 @@
+*.sql linguist-detectable=true
 *.sql linguist-language=SQL
+src/**/*.sql linguist-detectable=true
 src/**/*.sql linguist-language=SQL
 *.md linguist-documentation
 LICENSE linguist-documentation
