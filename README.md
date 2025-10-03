@@ -2,6 +2,12 @@
 
 <div align="center">
 
+## 🖼️ Imagem Hero
+
+<img src="images/hero_image.png" alt="Imagem Hero do Projeto" width="100%"/>
+
+<br>
+
 ![SQL](https://img.shields.io/badge/SQL-4479A1?style=for-the-badge&logo=postgresql&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)
@@ -186,15 +192,15 @@ sql-data-warehouse-analysis/
 -- Análise de vendas com window functions
 WITH sales_by_month AS (
     SELECT 
-        DATE_TRUNC('month', order_date) AS month,
+        DATE_TRUNC(\'month\', order_date) AS month,
         SUM(total_amount) AS monthly_sales,
         COUNT(DISTINCT order_id) AS order_count,
         COUNT(DISTINCT customer_id) AS unique_customers,
         AVG(total_amount) AS avg_order_value
     FROM fact_sales fs
     JOIN dim_date dd ON fs.date_key = dd.date_key
-    WHERE order_date >= CURRENT_DATE - INTERVAL '24 months'
-    GROUP BY DATE_TRUNC('month', order_date)
+    WHERE order_date >= CURRENT_DATE - INTERVAL \'24 months\'
+    GROUP BY DATE_TRUNC(\'month\', order_date)
 ),
 sales_with_growth AS (
     SELECT 
@@ -234,7 +240,7 @@ WITH seasonal_analysis AS (
         AVG(fs.total_amount) AS avg_order_value
     FROM fact_sales fs
     JOIN dim_date dd ON fs.date_key = dd.date_key
-    WHERE dd.date_actual >= CURRENT_DATE - INTERVAL '3 years'
+    WHERE dd.date_actual >= CURRENT_DATE - INTERVAL \'3 years\'
     GROUP BY 
         EXTRACT(QUARTER FROM dd.date_actual),
         EXTRACT(MONTH FROM dd.date_actual),
@@ -244,13 +250,13 @@ SELECT
     quarter,
     month,
     CASE day_of_week
-        WHEN 0 THEN 'Sunday'
-        WHEN 1 THEN 'Monday'
-        WHEN 2 THEN 'Tuesday'
-        WHEN 3 THEN 'Wednesday'
-        WHEN 4 THEN 'Thursday'
-        WHEN 5 THEN 'Friday'
-        WHEN 6 THEN 'Saturday'
+        WHEN 0 THEN \'Sunday\'
+        WHEN 1 THEN \'Monday\'
+        WHEN 2 THEN \'Tuesday\'
+        WHEN 3 THEN \'Wednesday\'
+        WHEN 4 THEN \'Thursday\'
+        WHEN 5 THEN \'Friday\'
+        WHEN 6 THEN \'Saturday\'
     END AS day_name,
     ROUND(AVG(total_sales), 2) AS avg_daily_sales,
     ROUND(AVG(order_count), 0) AS avg_daily_orders,
@@ -278,7 +284,7 @@ WITH customer_rfm AS (
     FROM dim_customer dc
     JOIN fact_sales fs ON dc.customer_key = fs.customer_key
     JOIN dim_date dd ON fs.date_key = dd.date_key
-    WHERE dd.date_actual >= CURRENT_DATE - INTERVAL '2 years'
+    WHERE dd.date_actual >= CURRENT_DATE - INTERVAL \'2 years\'
     GROUP BY dc.customer_id, dc.customer_name
 ),
 rfm_scores AS (
@@ -299,16 +305,16 @@ rfm_segments AS (
         *,
         CASE 
             WHEN recency_score >= 4 AND frequency_score >= 4 AND monetary_score >= 4 
-            THEN 'Champions'
+            THEN \'Champions\'
             WHEN recency_score >= 3 AND frequency_score >= 3 AND monetary_score >= 3 
-            THEN 'Loyal Customers'
+            THEN \'Loyal Customers\'
             WHEN recency_score >= 4 AND frequency_score <= 2 
-            THEN 'New Customers'
+            THEN \'New Customers\'
             WHEN recency_score <= 2 AND frequency_score >= 3 
-            THEN 'At Risk'
+            THEN \'At Risk\'
             WHEN recency_score <= 2 AND frequency_score <= 2 
-            THEN 'Lost Customers'
-            ELSE 'Potential Loyalists'
+            THEN \'Lost Customers\'
+            ELSE \'Potential Loyalists\'
         END AS customer_segment
     FROM rfm_scores
 )
@@ -332,7 +338,7 @@ WITH customer_cohorts AS (
     SELECT 
         dc.customer_id,
         MIN(dd.date_actual) AS first_purchase_date,
-        DATE_TRUNC('month', MIN(dd.date_actual)) AS cohort_month
+        DATE_TRUNC(\'month\', MIN(dd.date_actual)) AS cohort_month
     FROM dim_customer dc
     JOIN fact_sales fs ON dc.customer_key = fs.customer_key
     JOIN dim_date dd ON fs.date_key = dd.date_key
@@ -342,9 +348,9 @@ customer_activities AS (
     SELECT 
         cc.customer_id,
         cc.cohort_month,
-        DATE_TRUNC('month', dd.date_actual) AS activity_month,
-        EXTRACT(EPOCH FROM (DATE_TRUNC('month', dd.date_actual) - cc.cohort_month)) / 
-        EXTRACT(EPOCH FROM INTERVAL '1 month') AS period_number
+        DATE_TRUNC(\'month\', dd.date_actual) AS activity_month,
+        EXTRACT(EPOCH FROM (DATE_TRUNC(\'month\', dd.date_actual) - cc.cohort_month)) / 
+        EXTRACT(EPOCH FROM INTERVAL \'1 month\') AS period_number
     FROM customer_cohorts cc
     JOIN fact_sales fs ON cc.customer_id = fs.customer_id
     JOIN dim_date dd ON fs.date_key = dd.date_key
@@ -396,7 +402,7 @@ WITH product_performance AS (
     FROM dim_product dp
     JOIN fact_sales fs ON dp.product_key = fs.product_key
     JOIN dim_date dd ON fs.date_key = dd.date_key
-    WHERE dd.date_actual >= CURRENT_DATE - INTERVAL '12 months'
+    WHERE dd.date_actual >= CURRENT_DATE - INTERVAL \'12 months\'
     GROUP BY dp.product_id, dp.product_name, dp.category, dp.subcategory
 ),
 product_rankings AS (
@@ -422,8 +428,55 @@ SELECT
     customer_reach_rank,
     ROUND(revenue_percentile * 100, 2) AS revenue_percentile
 FROM product_rankings
-WHERE revenue_rank <= 50  -- Top 50 produtos
-ORDER BY revenue_rank;
+WHERE revenue_rank <= 20 -- Top 20 produtos
+ORDER BY total_revenue DESC;
+```
+
+**Análise de Cesta de Compras**
+```sql
+-- Análise de cesta de compras (Market Basket Analysis)
+WITH order_items AS (
+    SELECT 
+        fs.order_id,
+        dp.product_name
+    FROM fact_sales fs
+    JOIN dim_product dp ON fs.product_key = dp.product_key
+),
+pairs AS (
+    SELECT 
+        oi1.product_name AS product_a,
+        oi2.product_name AS product_b,
+        COUNT(DISTINCT oi1.order_id) AS pair_frequency
+    FROM order_items oi1
+    JOIN order_items oi2 ON oi1.order_id = oi2.order_id AND oi1.product_name < oi2.product_name
+    GROUP BY oi1.product_name, oi2.product_name
+),
+product_frequency AS (
+    SELECT 
+        product_name,
+        COUNT(DISTINCT order_id) AS single_frequency
+    FROM order_items
+    GROUP BY product_name
+)
+SELECT 
+    p.product_a,
+    p.product_b,
+    p.pair_frequency,
+    pf_a.single_frequency AS freq_a,
+    pf_b.single_frequency AS freq_b,
+    -- Support: frequência do par
+    ROUND(100.0 * p.pair_frequency / (SELECT COUNT(DISTINCT order_id) FROM order_items), 4) AS support,
+    -- Confidence: P(B|A)
+    ROUND(100.0 * p.pair_frequency / pf_a.single_frequency, 2) AS confidence_a_b,
+    -- Lift: quão mais provável é comprar B se comprar A
+    ROUND((1.0 * p.pair_frequency / (SELECT COUNT(DISTINCT order_id) FROM order_items)) / 
+          ((1.0 * pf_a.single_frequency / (SELECT COUNT(DISTINCT order_id) FROM order_items)) * 
+           (1.0 * pf_b.single_frequency / (SELECT COUNT(DISTINCT order_id) FROM order_items))), 2) AS lift
+FROM pairs p
+JOIN product_frequency pf_a ON p.product_a = pf_a.product_name
+JOIN product_frequency pf_b ON p.product_b = pf_b.product_name
+WHERE p.pair_frequency > 50 -- Limiar de frequência
+ORDER BY lift DESC, confidence_a_b DESC;
 ```
 
 #### 4. 💰 Análise Financeira
@@ -431,76 +484,52 @@ ORDER BY revenue_rank;
 **KPIs Financeiros**
 ```sql
 -- Dashboard de KPIs financeiros
-WITH financial_metrics AS (
+WITH financial_kpis AS (
     SELECT 
-        DATE_TRUNC('month', dd.date_actual) AS month,
-        SUM(fs.total_amount) AS gross_revenue,
-        SUM(fs.quantity * dp.cost_price) AS total_cost,
-        SUM(fs.total_amount) - SUM(fs.quantity * dp.cost_price) AS gross_profit,
-        COUNT(DISTINCT fs.order_id) AS total_orders,
-        COUNT(DISTINCT fs.customer_id) AS unique_customers,
-        SUM(fs.quantity) AS total_units_sold
+        DATE_TRUNC(\'month\', dd.date_actual) AS month,
+        SUM(fs.total_amount) AS total_revenue,
+        SUM(fs.total_amount - fs.product_cost * fs.quantity) AS gross_profit,
+        SUM(fs.total_amount - fs.product_cost * fs.quantity) / SUM(fs.total_amount) AS gross_margin,
+        SUM(fs.discount_amount) AS total_discounts,
+        SUM(fs.tax_amount) AS total_taxes,
+        SUM(fs.shipping_cost) AS total_shipping_costs
     FROM fact_sales fs
     JOIN dim_date dd ON fs.date_key = dd.date_key
-    JOIN dim_product dp ON fs.product_key = dp.product_key
-    WHERE dd.date_actual >= CURRENT_DATE - INTERVAL '24 months'
-    GROUP BY DATE_TRUNC('month', dd.date_actual)
-),
-metrics_with_calculations AS (
-    SELECT 
-        month,
-        gross_revenue,
-        total_cost,
-        gross_profit,
-        ROUND(100.0 * gross_profit / gross_revenue, 2) AS gross_margin_pct,
-        total_orders,
-        unique_customers,
-        total_units_sold,
-        ROUND(gross_revenue / total_orders, 2) AS avg_order_value,
-        ROUND(gross_revenue / unique_customers, 2) AS avg_customer_value,
-        ROUND(total_orders::DECIMAL / unique_customers, 2) AS avg_orders_per_customer
-    FROM financial_metrics
+    WHERE dd.date_actual >= CURRENT_DATE - INTERVAL \'12 months\'
+    GROUP BY DATE_TRUNC(\'month\', dd.date_actual)
 )
 SELECT 
     month,
-    gross_revenue,
-    total_cost,
-    gross_profit,
-    gross_margin_pct,
-    total_orders,
-    unique_customers,
-    total_units_sold,
-    avg_order_value,
-    avg_customer_value,
-    avg_orders_per_customer,
-    -- Comparação com mês anterior
-    LAG(gross_revenue) OVER (ORDER BY month) AS prev_month_revenue,
-    ROUND(100.0 * (gross_revenue - LAG(gross_revenue) OVER (ORDER BY month)) / 
-          LAG(gross_revenue) OVER (ORDER BY month), 2) AS revenue_growth_pct
-FROM metrics_with_calculations
-ORDER BY month DESC;
+    ROUND(total_revenue, 2) AS total_revenue,
+    ROUND(gross_profit, 2) AS gross_profit,
+    ROUND(gross_margin * 100, 2) AS gross_margin_pct,
+    ROUND(total_discounts, 2) AS total_discounts,
+    ROUND(total_taxes, 2) AS total_taxes,
+    ROUND(total_shipping_costs, 2) AS total_shipping_costs
+FROM financial_kpis
+ORDER BY month;
 ```
 
-### 🔄 ETL com dbt
+### ⚙️ Exemplos de Código dbt
 
-#### Modelo Staging
+#### Modelo de Staging
 ```sql
 -- models/staging/stg_orders.sql
-{{ config(materialized='view') }}
+{{ config(materialized=\'view\') }}
 
 WITH source_orders AS (
-    SELECT * FROM {{ source('ecommerce', 'orders') }}
+    SELECT * FROM {{ source(\'raw\', \'orders\') }}
 ),
 
 cleaned_orders AS (
-    SELECT
+    SELECT 
         order_id,
         customer_id,
         order_date::DATE AS order_date,
         CASE 
-            WHEN status IN ('completed', 'shipped', 'delivered') THEN 'completed'
-            WHEN status IN ('cancelled', 'refunded') THEN 'cancelled'
-            ELSE 'pending'
+            WHEN status = \'completed\' THEN \'completed\'
+            WHEN status IN (\'cancelled\', \'refunded\') THEN \'cancelled\'
+            ELSE \'pending\'
         END AS order_status,
         total_amount::DECIMAL(10,2) AS total_amount,
         shipping_cost::DECIMAL(10,2) AS shipping_cost,
@@ -520,15 +549,15 @@ SELECT * FROM cleaned_orders
 ```sql
 -- models/marts/dim_customer.sql
 {{ config(
-    materialized='table',
+    materialized=\'table\',
     indexes=[
-      {'columns': ['customer_id'], 'unique': True},
-      {'columns': ['email'], 'unique': True}
+      {\'columns\': [\'customer_id\'], \'unique\': True},
+      {\'columns\': [\'email\'], \'unique\': True}
     ]
 ) }}
 
 WITH customer_base AS (
-    SELECT * FROM {{ ref('stg_customers') }}
+    SELECT * FROM {{ ref(\'stg_customers\') }}
 ),
 
 customer_metrics AS (
@@ -539,14 +568,14 @@ customer_metrics AS (
         COUNT(DISTINCT order_id) AS total_orders,
         SUM(total_amount) AS lifetime_value,
         AVG(total_amount) AS avg_order_value
-    FROM {{ ref('stg_orders') }}
-    WHERE order_status = 'completed'
+    FROM {{ ref(\'stg_orders\') }}
+    WHERE order_status = \'completed\'
     GROUP BY customer_id
 ),
 
 final AS (
     SELECT 
-        {{ dbt_utils.generate_surrogate_key(['cb.customer_id']) }} AS customer_key,
+        {{ dbt_utils.generate_surrogate_key([\'cb.customer_id\']) }} AS customer_key,
         cb.customer_id,
         cb.first_name,
         cb.last_name,
@@ -564,10 +593,10 @@ final AS (
         COALESCE(cm.lifetime_value, 0) AS lifetime_value,
         COALESCE(cm.avg_order_value, 0) AS avg_order_value,
         CASE 
-            WHEN cm.total_orders >= 10 THEN 'VIP'
-            WHEN cm.total_orders >= 5 THEN 'Regular'
-            WHEN cm.total_orders >= 1 THEN 'New'
-            ELSE 'Prospect'
+            WHEN cm.total_orders >= 10 THEN \'VIP\'
+            WHEN cm.total_orders >= 5 THEN \'Regular\'
+            WHEN cm.total_orders >= 1 THEN \'New\'
+            ELSE \'Prospect\'
         END AS customer_tier,
         CURRENT_TIMESTAMP AS dbt_updated_at
     FROM customer_base cb
