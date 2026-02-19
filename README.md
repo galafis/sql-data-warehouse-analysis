@@ -35,6 +35,22 @@ Plataforma abrangente de **análise de data warehouse** desenvolvida com SQL ava
 - 🎯 **Performance**: Otimização de queries, indexação, particionamento
 - 📋 **Governança**: Qualidade de dados, linhagem, documentação
 
+### Arquitetura do Pipeline
+
+```mermaid
+flowchart LR
+    A[Sistemas Fonte\nERP / CRM / APIs] --> B[ETL\ndbt / Airflow / Pandas]
+    B --> C[Star Schema\nDimensões / Fatos]
+    C --> D[Modelo Dimensional\nSnowflake / PostgreSQL]
+    D --> E[SQL Analytics\nCTEs / Window Functions]
+    E --> F[Relatórios\nSuperset / Grafana / Jupyter]
+
+    subgraph Data Warehouse
+        C
+        D
+    end
+```
+
 ### 🎯 Objetivos da Plataforma
 
 - **Centralizar dados** de múltiplas fontes operacionais
@@ -700,6 +716,22 @@ Comprehensive **data warehouse analysis platform** developed with advanced SQL a
 - 📈 **Analytics**: KPIs, business metrics, temporal analyses
 - 🎯 **Performance**: Query optimization, indexing, partitioning
 - 📋 **Governance**: Data quality, lineage, documentation
+
+### Pipeline Architecture
+
+```mermaid
+flowchart LR
+    A[Source Systems\nERP / CRM / APIs] --> B[ETL\ndbt / Airflow / Pandas]
+    B --> C[Star Schema\nDimensions / Facts]
+    C --> D[Dimensional Model\nSnowflake / PostgreSQL]
+    D --> E[SQL Analytics\nCTEs / Window Functions]
+    E --> F[Reporting\nSuperset / Grafana / Jupyter]
+
+    subgraph Data Warehouse
+        C
+        D
+    end
+```
 
 ### 🎯 Platform Objectives
 
