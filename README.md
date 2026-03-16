@@ -4,10 +4,10 @@
   <img src="images/hero_image.png" alt="SQL Data Warehouse Analysis" width="800"/>
 </p>
 
-[![Python](https://img.shields.io/badge/Python-3.9+-3776AB.svg)](https://www.python.org/)
-[![SQLite](https://img.shields.io/badge/SQLite-3-003B57.svg)](https://sqlite.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg?logo=docker)](Dockerfile)
+![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)
+![License-MIT](https://img.shields.io/badge/License--MIT-yellow?style=for-the-badge)
+
 
 Toolkit completo para construcao e analise de Data Warehouses utilizando SQL e Python com SQLite. Inclui construcao de star schema, gerenciamento de dimensoes SCD Type 2, pipelines ETL, simulacao de cubos OLAP e analise de otimizacao de queries.
 
